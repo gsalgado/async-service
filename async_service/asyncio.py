@@ -32,12 +32,13 @@ class FunctionTask(BaseFunctionTask):
     #
     async def run(self) -> None:
         try:
-            await self._async_fn(*self._async_fn_args)
+            retval = await self._async_fn(*self._async_fn_args)
             if self.daemon:
                 raise DaemonTaskExit(f"Daemon task {self} exited")
 
             while self.children:
                 await tuple(self.children)[0].wait_done()
+            return retval
         finally:
             if self.parent is not None:
                 self.parent.discard_child(self)
@@ -302,12 +303,33 @@ class AsyncioManager(BaseManager):
             self._run_and_manage_task(task), loop=self._loop
         )
         self._asyncio_tasks.add(task.asyncio_task)  # type: ignore
+        return task
 
     def _get_current_task(self) -> "asyncio.Future[Any]":
         current_asyncio_task = get_current_task()
         if current_asyncio_task is None:
             raise LifecycleError("Invariant: current asyncio task is None")
         return current_asyncio_task
+
+    async def run_task_and_await(
+        self,
+        async_fn: Callable[..., Awaitable[Any]],
+        *args: Any,
+        daemon: bool = False,
+        name: str = None,
+    ) -> None:
+        current_asyncio_task = self._get_current_task()
+
+        task = FunctionTask(
+            name=get_task_name(async_fn, name),
+            daemon=daemon,
+            parent=self._find_parent_task(current_asyncio_task),
+            async_fn=async_fn,
+            async_fn_args=args,
+        )
+        task = self._common_run_task(task)
+        r = await task.asyncio_task
+        return r
 
     def run_task(
         self,

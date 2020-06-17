@@ -290,14 +290,14 @@ class BaseManager(InternalManagerAPI):
 
         self._total_task_count += 1
 
-        self._schedule_task(task)
+        return self._schedule_task(task)
 
     async def _run_and_manage_task(self, task: TaskAPI) -> None:
         self.logger.debug("%s: task %s running", self, task)
 
         try:
             try:
-                await task.run()
+                return await task.run()
             except DaemonTaskExit:
                 if self.is_cancelled:
                     pass
@@ -332,6 +332,7 @@ class BaseManager(InternalManagerAPI):
             self._errors.append(cast(EXC_INFO, sys.exc_info()))
             self.cancel()
         else:
+            # XXX: Need to confirm that this executes when the task completes.
             if task.parent is None:
                 self._root_tasks.remove(task)
             self.logger.debug("%s: task %s exited cleanly.", self, task)

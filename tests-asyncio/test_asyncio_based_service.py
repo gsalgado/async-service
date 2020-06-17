@@ -299,6 +299,26 @@ async def test_asyncio_service_manager_run_task():
 
 
 @pytest.mark.asyncio
+async def test_asyncio_service_manager_run_task_and_await():
+    run_finished = asyncio.Event()
+    task_finished = object()
+
+    @as_service
+    async def RunTaskService(manager):
+        async def task_fn():
+            await asyncio.sleep(0)
+            return task_finished
+
+        retval = await manager.run_task_and_await(task_fn)
+        assert retval is task_finished
+        run_finished.set()
+        # await manager.wait_finished()
+
+    async with background_asyncio_service(RunTaskService()):
+        await asyncio.wait_for(run_finished.wait(), timeout=0.1)
+
+
+@pytest.mark.asyncio
 async def test_asyncio_service_manager_run_task_waits_for_task_completion():
     task_event = asyncio.Event()
 
